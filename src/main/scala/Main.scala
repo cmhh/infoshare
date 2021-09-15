@@ -65,6 +65,6 @@ object Main extends App {
   if (out.exists()) {
     println("\n\nFile created successfully.\n\n")
   } else {
-    println("\n\nFuckity.\n\n")
+    println("\n\nFailed to create file.\n\n")
   }
 }
