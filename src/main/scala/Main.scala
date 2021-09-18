@@ -4,67 +4,110 @@ import org.openqa.selenium.{WebDriver, WebElement}
 import org.openqa.selenium.chrome.ChromeDriver
 import org.openqa.selenium.chrome.ChromeOptions
 import java.util.concurrent.TimeUnit
-import java.io.File
-import java.nio.file._
+import java.io.{File, BufferedWriter, FileWriter}
+import scala.io.Source
+import scala.util.{Try, Success, Failure}
 
-object Main extends App {
-  val sch = new File(args(0))
-  val out = new File(args(1))
-  val wrk = new File(".")
-  val tmp = new File("./ExportDirect.csv")
+object infoshare {
+  def makeSch(ids: String, outputFile: String): Try[String] = 
+    makeSch(ids.split(",").toList, outputFile)
 
-  if (out.exists()) out.delete()
-  if (tmp.exists()) tmp.delete()
+  def makeSch(ids: Seq[String], outputFile: String): Try[String] = Try {
+    val bw = new BufferedWriter(new FileWriter(new File(outputFile)))
+    bw.write(ids.mkString("\n"))
+    bw.close()
+    outputFile
+  }
 
-  val options: ChromeOptions = new ChromeOptions()
-  options.addArguments("--headless")
-  options.addArguments("--no-sandbox")
-  options.addArguments("--disable-extensions")
+  def fetch(inputSch: String, outputFile: String): Try[String] = Try {
+    val sch = new File(inputSch)
+    val out = new File(outputFile)
+    val wrk = new File(".")
+    val tmp = new File("./ExportDirect.csv")
 
-  val prefs = new java.util.HashMap[String, Any]()
-  prefs.put("download.prompt_for_download", false)
-  prefs.put("download.defaut_directory", wrk.getAbsolutePath())
+    if (out.exists()) out.delete()
+    if (tmp.exists()) tmp.delete()
 
-  options
-    .setExperimentalOption(
-      "prefs", 
-      prefs
-    )
+    val options: ChromeOptions = new ChromeOptions()
+    options.addArguments("--headless")
+    options.addArguments("--no-sandbox")
+    options.addArguments("--disable-extensions")
 
-  val driver: ChromeDriver = new ChromeDriver(options)
+    val prefs = new java.util.HashMap[String, Any]()
+    prefs.put("download.prompt_for_download", false)
+    prefs.put("download.defaut_directory", wrk.getAbsolutePath())
 
-  driver.get("http://infoshare.stats.govt.nz/infoshare/ExportDirect.aspx")
-  driver.manage().timeouts().implicitlyWait (10, TimeUnit.SECONDS)
-  driver.manage().window().maximize()
+    options
+      .setExperimentalOption(
+        "prefs", 
+        prefs
+      )
 
-  // choose file
-  driver
-    .findElementById("ctl00_MainContent_fuSearchFile")
-    .sendKeys(sch.getAbsolutePath())
+    val driver: ChromeDriver = new ChromeDriver(options)
 
-  // select all time periods
-  driver
-    .findElementById("ctl00_MainContent_TimeVariableSelector_lblSelectAll")
-    .click()
+    driver.get("http://infoshare.stats.govt.nz/infoshare/ExportDirect.aspx")
+    driver.manage().timeouts().implicitlyWait (10, TimeUnit.SECONDS)
+    driver.manage().window().maximize()
 
-  // download
-  driver
-    .findElementById("ctl00_MainContent_btnGenerate")
-    .click()
+    // choose file
+    driver
+      .findElementById("ctl00_MainContent_fuSearchFile")
+      .sendKeys(sch.getAbsolutePath())
 
-  Thread.sleep(5000)
+    // select all time periods
+    driver
+      .findElementById("ctl00_MainContent_TimeVariableSelector_lblSelectAll")
+      .click()
 
-  Files.copy(
-    Paths.get(tmp.getAbsolutePath()), 
-    Paths.get(out.getAbsolutePath()), 
-    StandardCopyOption.REPLACE_EXISTING
+    // download
+    driver
+      .findElementById("ctl00_MainContent_btnGenerate")
+      .click()
+
+    Thread.sleep(5000)
+
+    // add 'date' field to header
+    // remove trailing commas on each row
+    // remove trailing whitespace and metadata
+    val lines = Source
+      .fromFile(tmp)
+      .getLines()
+      .toList
+      .filter(line => line != "" && line != "Source: Statistics New Zealand")
+      .map(line => {
+        val newl = if (line.takeRight(1) == ",") line.dropRight(1) else line
+        if (newl.head == ',') s"date${newl}" else newl 
+      })
+
+    // write to file
+    val bw = new BufferedWriter(new FileWriter(out))
+    bw.write(lines.mkString("\n"))
+    bw.close()
+
+    tmp.delete()
+
+    outputFile
+  }
+}
+
+object FetchSch extends App {
+  infoshare.fetch(args(0), args(1)) match {
+    case Success(f) => println(s"Created $f successfully.")
+    case Failure(e) => println(s"Failed to create output.\n${e.getMessage()}")
+  }
+}
+
+object FetchIds extends App {
+  val sch = infoshare.makeSch(
+    args(0), 
+    File.createTempFile("infoshare", ".sch").getAbsolutePath()
   )
 
-  tmp.delete()
-
-  if (out.exists()) {
-    println("\n\nFile created successfully.\n\n")
-  } else {
-    println("\n\nFailed to create file.\n\n")
+  sch match {
+    case Success(f) => infoshare.fetch(f, args(1)) match {
+      case Success(g) => println(s"Created $g successfully.")
+      case Failure(e) => println(s"Failed to create output.\n${e.getMessage()}")
+    }
+    case Failure(e) => println(s"Failed to create temp file.")
   }
 }

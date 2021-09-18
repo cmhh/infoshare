@@ -16,4 +16,4 @@ RUN apt-get update && \
 
 COPY ./target/scala-2.13/infoshare.jar infoshare.jar
 
-ENTRYPOINT ["java", "-jar", "infoshare.jar"]
+ENTRYPOINT ["java", "-cp", "infoshare.jar"]

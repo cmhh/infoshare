@@ -11,7 +11,7 @@ lazy val root = (project in file(".")).
 
     scalacOptions += "-deprecation",
 
-    assembly / mainClass := Some("org.cmhh.Main"),
+    assembly / mainClass := Some("org.cmhh.FetchSch"),
     assembly / assemblyJarName := "infoshare.jar",
     
     ThisBuild / assemblyMergeStrategy := {
